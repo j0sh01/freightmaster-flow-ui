@@ -6,6 +6,12 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import Dashboard from "./pages/Dashboard";
 import GoodsReceipt from "./pages/GoodsReceipt";
+import ShipmentManifest from "./pages/ShipmentManifest";
+import VehicleLog from "./pages/VehicleLog";
+import LeftGoodsLog from "./pages/LeftGoodsLog";
+import DeliveryNote from "./pages/DeliveryNote";
+import Customers from "./pages/Customers";
+import Items from "./pages/Items";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
