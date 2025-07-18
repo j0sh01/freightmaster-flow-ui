@@ -13,50 +13,70 @@ import {
   BarChart3
 } from "lucide-react";
 import heroImage from "@/assets/hero-logistics.jpg";
-
-const statsData = [
-  {
-    title: "Goods Received",
-    value: "1,248",
-    change: "+12%",
-    changeType: "increase",
-    icon: Package,
-    color: "status-pending"
-  },
-  {
-    title: "Shipments in Transit",
-    value: "89",
-    change: "+5%",
-    changeType: "increase",
-    icon: Truck,
-    color: "status-in-transit"
-  },
-  {
-    title: "Left Goods",
-    value: "23",
-    change: "-8%",
-    changeType: "decrease",
-    icon: AlertTriangle,
-    color: "status-delayed"
-  },
-  {
-    title: "Completed Deliveries",
-    value: "2,456",
-    change: "+18%",
-    changeType: "increase",
-    icon: CheckCircle,
-    color: "status-completed"
-  }
-];
-
-const recentActivities = [
-  { id: 1, type: "Goods Received", description: "Order #GR-2024-001 received from Acme Corp", time: "2 hours ago", status: "completed" },
-  { id: 2, type: "Shipment Created", description: "Manifest #SM-2024-089 created for Delhi delivery", time: "4 hours ago", status: "in-transit" },
-  { id: 3, type: "Vehicle Assigned", description: "Vehicle TN-45-AB-1234 assigned to route Delhi-Mumbai", time: "6 hours ago", status: "pending" },
-  { id: 4, type: "Delivery Completed", description: "Delivery Note #DN-2024-156 completed", time: "8 hours ago", status: "completed" }
-];
+import { useEffect, useState } from "react";
+import { fetchDashboardData } from "@/api/frappe";
 
 export default function Dashboard() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<any>({});
+  const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  const [performance, setPerformance] = useState<any>({});
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchDashboardData();
+        setMetrics(data.metrics || {});
+        setRecentActivities(data.recent_activities || []);
+        setPerformance(data.performance || {});
+      } catch (err: any) {
+        setError(err.message || "Failed to load dashboard data");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  // Stats cards config
+  const statsData = [
+    {
+      title: "Goods Received",
+      value: loading ? "-" : metrics.goods_received ?? "-",
+      change: "+12%", // Placeholder, can be dynamic if backend provides
+      changeType: "increase",
+      icon: Package,
+      color: "status-pending"
+    },
+    {
+      title: "Shipments in Transit",
+      value: loading ? "-" : metrics.shipments_in_transit ?? "-",
+      change: "+5%",
+      changeType: "increase",
+      icon: Truck,
+      color: "status-in-transit"
+    },
+    {
+      title: "Left Goods",
+      value: loading ? "-" : metrics.left_goods ?? "-",
+      change: "-8%",
+      changeType: "decrease",
+      icon: AlertTriangle,
+      color: "status-delayed"
+    },
+    {
+      title: "Completed Deliveries",
+      value: loading ? "-" : metrics.completed_deliveries ?? "-",
+      change: "+18%",
+      changeType: "increase",
+      icon: CheckCircle,
+      color: "status-completed"
+    }
+  ];
+
   return (
     <div className="space-y-6">
       {/* Hero Section */}
@@ -115,7 +135,11 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentActivities.map((activity) => (
+              {loading ? (
+                <div className="text-center text-muted-foreground">Loading...</div>
+              ) : recentActivities.length === 0 ? (
+                <div className="text-center text-muted-foreground">No recent activities</div>
+              ) : recentActivities.map((activity) => (
                 <div key={activity.id} className="flex items-center space-x-4 p-4 rounded-lg border border-border">
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
@@ -180,23 +204,23 @@ export default function Dashboard() {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-sm font-medium">Delivery Success Rate</span>
-                <span className="text-sm text-muted-foreground">94%</span>
+                <span className="text-sm text-muted-foreground">{loading ? '-' : (performance.delivery_success_rate ?? '-')}%</span>
               </div>
-              <Progress value={94} className="h-2" />
+              <Progress value={performance.delivery_success_rate || 0} className="h-2" />
             </div>
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-sm font-medium">Vehicle Utilization</span>
-                <span className="text-sm text-muted-foreground">78%</span>
+                <span className="text-sm text-muted-foreground">{loading ? '-' : (performance.vehicle_utilization ?? '-')}%</span>
               </div>
-              <Progress value={78} className="h-2" />
+              <Progress value={performance.vehicle_utilization || 0} className="h-2" />
             </div>
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-sm font-medium">Customer Satisfaction</span>
-                <span className="text-sm text-muted-foreground">96%</span>
+                <span className="text-sm text-muted-foreground">{loading ? '-' : (performance.customer_satisfaction ?? '-')}%</span>
               </div>
-              <Progress value={96} className="h-2" />
+              <Progress value={performance.customer_satisfaction || 0} className="h-2" />
             </div>
           </div>
         </CardContent>

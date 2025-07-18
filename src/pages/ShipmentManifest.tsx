@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,45 +46,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const mockShipmentManifests = [
-  {
-    id: "SM-2024-001",
-    vehicleNumber: "TN-45-AB-1234",
-    driver: "Rajesh Kumar",
-    destination: "Mumbai, Maharashtra",
-    goodsReceipts: ["GR-2024-001", "GR-2024-003"],
-    status: "submitted",
-    createdDate: "2024-01-15",
-    estimatedDelivery: "2024-01-17",
-    totalWeight: "379 kg",
-    totalPackages: 15
-  },
-  {
-    id: "SM-2024-002", 
-    vehicleNumber: "KA-12-CD-5678",
-    driver: "Suresh Patel",
-    destination: "Delhi, NCR",
-    goodsReceipts: ["GR-2024-002"],
-    status: "in-transit",
-    createdDate: "2024-01-14",
-    estimatedDelivery: "2024-01-16",
-    totalWeight: "89 kg",
-    totalPackages: 8
-  },
-  {
-    id: "SM-2024-003",
-    vehicleNumber: "MH-02-EF-9012",
-    driver: "Amit Sharma",
-    destination: "Bangalore, Karnataka",
-    goodsReceipts: ["GR-2024-004", "GR-2024-005"],
-    status: "completed",
-    createdDate: "2024-01-13",
-    estimatedDelivery: "2024-01-15",
-    totalWeight: "567 kg",
-    totalPackages: 23
-  }
-];
+import { fetchShipmentManifests } from "@/api/frappe";
 
 const mockVehicles = [
   { number: "TN-45-AB-1234", driver: "Rajesh Kumar", type: "Truck", capacity: "5 Ton" },
@@ -114,16 +76,60 @@ const getStatusBadge = (status: string) => {
 };
 
 export default function ShipmentManifest() {
+  const [manifests, setManifests] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [selectedVehicle, setSelectedVehicle] = useState("");
-  const [selectedGoods, setSelectedGoods] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+  const [filters, setFilters] = useState({ agent: "", vehicle: "", destination: "" });
+  const [selectedManifest, setSelectedManifest] = useState<any | null>(null);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
-  const filteredManifests = mockShipmentManifests.filter(manifest =>
-    manifest.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    manifest.vehicleNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    manifest.destination.toLowerCase().includes(searchTerm.toLowerCase())
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await fetchShipmentManifests(searchTerm, filters);
+        setManifests(result.data);
+        setTotal(result.total);
+      } catch (err: any) {
+        setError(err.message || "Error fetching shipment manifests");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [searchTerm, filters]);
+
+  // Map backend data to UI fields
+  const mappedManifests = manifests.map((doc) => ({
+    id: doc.name,
+    vehicle: doc.vehicle,
+    agent: doc.agent,
+    destination: doc.destination,
+    goodsReceipts: doc.reference_goods_receipt ? [doc.reference_goods_receipt] : [],
+    items: Array.isArray(doc.manifest_details) ? doc.manifest_details.map((d: any) => d.item_name).join(", ") : "-",
+    status: doc.status || "submitted",
+    shipmentDate: doc.shipment_date,
+    totalShippingCharges: doc.total_shipping_charges,
+  }));
+
+  const filteredManifests = mappedManifests.filter(manifest =>
+    manifest.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    manifest.vehicle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    manifest.destination?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    manifest.goodsReceipts.some((gr: string) =>
+      gr?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const paginatedManifests = filteredManifests.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div className="space-y-6">
@@ -151,7 +157,7 @@ export default function ShipmentManifest() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="vehicle">Select Vehicle</Label>
-                  <Select value={selectedVehicle} onValueChange={setSelectedVehicle}>
+                  <Select value={""} onValueChange={() => {}}>
                     <SelectTrigger>
                       <SelectValue placeholder="Choose vehicle" />
                     </SelectTrigger>
@@ -177,14 +183,8 @@ export default function ShipmentManifest() {
                       <input
                         type="checkbox"
                         id={receipt.id}
-                        checked={selectedGoods.includes(receipt.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedGoods([...selectedGoods, receipt.id]);
-                          } else {
-                            setSelectedGoods(selectedGoods.filter(id => id !== receipt.id));
-                          }
-                        }}
+                        checked={false} // No longer used
+                        onChange={(e) => {}} // No longer used
                         className="rounded"
                       />
                       <label htmlFor={receipt.id} className="flex-1 text-sm">
@@ -277,6 +277,7 @@ export default function ShipmentManifest() {
           <CardDescription>Track all shipment manifests and their status</CardDescription>
         </CardHeader>
         <CardContent>
+          {error && <div className="text-red-600 mb-2">{error}</div>}
           <div className="flex items-center justify-between mb-4">
             <div className="relative w-96">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -287,77 +288,196 @@ export default function ShipmentManifest() {
                 className="pl-8"
               />
             </div>
-            <Button variant="outline">
-              <Filter className="h-4 w-4 mr-2" />
-              Filter
-            </Button>
+            <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filter
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Filter Manifests</DialogTitle>
+                  <DialogDescription>Select filter criteria and apply.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block mb-1">Agent</label>
+                    <Input
+                      value={filters.agent}
+                      onChange={e => setFilters(f => ({ ...f, agent: e.target.value }))}
+                      placeholder="Enter agent name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1">Vehicle</label>
+                    <Input
+                      value={filters.vehicle}
+                      onChange={e => setFilters(f => ({ ...f, vehicle: e.target.value }))}
+                      placeholder="Enter vehicle"
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1">Destination</label>
+                    <Input
+                      value={filters.destination}
+                      onChange={e => setFilters(f => ({ ...f, destination: e.target.value }))}
+                      placeholder="Enter destination"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setFilters({ agent: "", vehicle: "", destination: "" })}>Clear</Button>
+                    <Button onClick={() => setFilterDialogOpen(false)}>Apply</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Manifest ID</TableHead>
-                <TableHead>Vehicle</TableHead>
-                <TableHead>Driver</TableHead>
-                <TableHead>Destination</TableHead>
-                <TableHead>Goods Receipts</TableHead>
-                <TableHead>Weight</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Est. Delivery</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredManifests.map((manifest) => (
-                <TableRow key={manifest.id}>
-                  <TableCell className="font-medium">{manifest.id}</TableCell>
-                  <TableCell>{manifest.vehicleNumber}</TableCell>
-                  <TableCell>{manifest.driver}</TableCell>
-                  <TableCell>{manifest.destination}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {manifest.goodsReceipts.map((gr) => (
-                        <Badge key={gr} variant="secondary" className="text-xs">
-                          {gr}
-                        </Badge>
-                      ))}
+          {loading ? (
+            <div>Loading...</div>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Manifest ID</TableHead>
+                    <TableHead>Vehicle</TableHead>
+                    <TableHead>Agent</TableHead>
+                    <TableHead>Destination</TableHead>
+                    <TableHead>Goods Receipts</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Shipment Date</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedManifests.map((manifest) => (
+                    <TableRow key={manifest.id}>
+                      <TableCell className="font-medium">{manifest.id}</TableCell>
+                      <TableCell>{manifest.vehicle}</TableCell>
+                      <TableCell>{manifest.agent}</TableCell>
+                      <TableCell>{manifest.destination}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {manifest.goodsReceipts.map((gr: string) => (
+                            <Badge key={gr} variant="secondary" className="text-xs">
+                              {gr}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>{manifest.items}</TableCell>
+                      <TableCell>{getStatusBadge(manifest.status)}</TableCell>
+                      <TableCell>{manifest.shipmentDate}</TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                // Find the full manifest object from manifests (not mappedManifests)
+                                const fullManifest = manifests.find(m => m.name === manifest.id);
+                                setSelectedManifest(fullManifest);
+                                setIsDetailsDialogOpen(true);
+                              }}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Truck className="h-4 w-4 mr-2" />
+                              View Vehicle Log
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <FileText className="h-4 w-4 mr-2" />
+                              Print Manifest
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive">
+                              Cancel Shipment
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {/* Details Dialog */}
+              <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Shipment Manifest Details</DialogTitle>
+                    <DialogDescription>All details for this shipment manifest</DialogDescription>
+                  </DialogHeader>
+                  {selectedManifest && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div><b>Manifest ID:</b> {selectedManifest.name}</div>
+                        <div><b>Vehicle:</b> {selectedManifest.vehicle}</div>
+                        <div><b>Agent:</b> {selectedManifest.agent}</div>
+                        <div><b>Destination:</b> {selectedManifest.destination}</div>
+                        <div><b>Shipment Date:</b> {selectedManifest.shipment_date}</div>
+                        <div><b>Status:</b> {selectedManifest.status}</div>
+                        <div className="col-span-2"><b>Goods Receipts:</b> {(selectedManifest.reference_goods_receipt || "-")}</div>
+                        <div className="col-span-2"><b>Total Shipping Charges:</b> {selectedManifest.total_shipping_charges}</div>
+                      </div>
+                      <div>
+                        <b>Manifest Details:</b>
+                        <Table className="mt-2">
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Item Name</TableHead>
+                              <TableHead>Quantity</TableHead>
+                              <TableHead>UOM</TableHead>
+                              <TableHead>Destination</TableHead>
+                              <TableHead>Shipping Charges</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(selectedManifest.manifest_details || []).map((d: any, i: number) => (
+                              <TableRow key={i}>
+                                <TableCell>{d.item_name}</TableCell>
+                                <TableCell>{d.quantity}</TableCell>
+                                <TableCell>{d.uom}</TableCell>
+                                <TableCell>{d.destination}</TableCell>
+                                <TableCell>{d.shipping_charges}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
-                  </TableCell>
-                  <TableCell>{manifest.totalWeight}</TableCell>
-                  <TableCell>{getStatusBadge(manifest.status)}</TableCell>
-                  <TableCell>{manifest.estimatedDelivery}</TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Truck className="h-4 w-4 mr-2" />
-                          View Vehicle Log
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <FileText className="h-4 w-4 mr-2" />
-                          Print Manifest
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive">
-                          Cancel Shipment
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  )}
+                </DialogContent>
+              </Dialog>
+            </>
+          )}
+          {/* Pagination Controls */}
+          <div className="flex justify-end mt-4 space-x-2 items-center">
+            <Button
+              variant="outline"
+              disabled={page === 1}
+              onClick={() => setPage(page - 1)}
+            >
+              Previous
+            </Button>
+            <span className="px-3 py-2">Page {page} of {totalPages}</span>
+            <Button
+              variant="outline"
+              disabled={page === totalPages || paginatedManifests.length < pageSize}
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

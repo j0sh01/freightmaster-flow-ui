@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,57 +47,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const mockLeftGoods = [
-  {
-    id: "LG-2024-001",
-    goodsReceiptId: "GR-2024-001",
-    manifestId: "SM-2024-001",
-    customer: "Acme Corporation",
-    itemsExpected: "Electronics, Documents, Accessories",
-    itemsLeft: "Accessories (2 boxes)",
-    reason: "Damaged packaging during loading",
-    status: "pending",
-    reportedDate: "2024-01-15",
-    reportedBy: "Warehouse Staff",
-    estimatedValue: "₹15,000"
-  },
-  {
-    id: "LG-2024-002", 
-    goodsReceiptId: "GR-2024-003",
-    manifestId: "SM-2024-002",
-    customer: "Global Traders",
-    itemsExpected: "Textiles, Garments, Fabrics",
-    itemsLeft: "Fabrics (1 roll)",
-    reason: "Vehicle capacity exceeded",
-    status: "resolved",
-    reportedDate: "2024-01-14",
-    reportedBy: "Loading Team",
-    estimatedValue: "₹8,500"
-  },
-  {
-    id: "LG-2024-003",
-    goodsReceiptId: "GR-2024-005",
-    manifestId: "SM-2024-003",
-    customer: "Tech Solutions Ltd",
-    itemsExpected: "Computer Parts, Cables",
-    itemsLeft: "Cables (3 boxes)",
-    reason: "Items not ready for shipment",
-    status: "investigating",
-    reportedDate: "2024-01-13",
-    reportedBy: "Quality Check",
-    estimatedValue: "₹12,000"
-  }
-];
+import { fetchLeftGoodsLogs } from "@/api/frappe";
 
 const getStatusBadge = (status: string) => {
-  switch (status) {
+  switch (status?.toLowerCase()) {
+    case "manifest left":
+      return <Badge className="bg-blue-100 text-blue-800 border-blue-300">Manifest Left</Badge>;
+    case "shipped":
+      return <Badge className="bg-green-100 text-green-800 border-green-300">Shipped</Badge>;
     case "pending":
-      return <Badge className="bg-status-pending text-warning-foreground">Pending</Badge>;
+      return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">Pending</Badge>;
     case "investigating":
-      return <Badge className="bg-status-delayed text-destructive-foreground">Investigating</Badge>;
+      return <Badge className="bg-red-100 text-red-800 border-red-300">Investigating</Badge>;
     case "resolved":
-      return <Badge className="bg-status-completed text-success-foreground">Resolved</Badge>;
+      return <Badge className="bg-green-100 text-green-800 border-green-300">Resolved</Badge>;
     case "cancelled":
       return <Badge variant="outline">Cancelled</Badge>;
     default:
@@ -105,15 +68,59 @@ const getStatusBadge = (status: string) => {
   }
 };
 
+function formatTZS(amount: number | undefined) {
+  if (typeof amount !== "number") return "-";
+  return amount.toLocaleString("en-TZ", { style: "currency", currency: "TZS", maximumFractionDigits: 0 });
+}
+
+const PAGE_SIZE = 20;
+
 export default function LeftGoodsLog() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [logs, setLogs] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState<any>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [selectedLog, setSelectedLog] = useState<any | null>(null);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
-  const filteredLeftGoods = mockLeftGoods.filter(item =>
-    item.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.goodsReceiptId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.itemsLeft.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    setPage(1); // Reset to first page on new search
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await fetchLeftGoodsLogs(searchTerm);
+        setLogs(result.data);
+        setMetrics(result.metrics || {});
+      } catch (err: any) {
+        setError(err.message || "Error fetching left goods logs");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [searchTerm]);
+
+  const filteredLeftGoods = logs.map(log => ({
+    id: log.name,
+    customer: log.customer,
+    goodsReceiptId: log.goods_receipt,
+    manifestId: log.shipment_manifest,
+    itemsLeft: log.left_goods_details?.map(d => `${d.item_name} (${d.quantity_left} ${d.uom})`).join(", ") || "-",
+    reason: log.remarks || "-",
+    status: log.status,
+    reportedDate: log.log_date,
+    estimatedValue: log.left_goods_details?.reduce((sum, d) => sum + (d.estimated_value || 0), 0) || "-"
+  }));
+
+  const totalPages = Math.max(1, Math.ceil(filteredLeftGoods.length / PAGE_SIZE));
+  const paginatedLeftGoods = filteredLeftGoods.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -225,38 +232,38 @@ export default function LeftGoodsLog() {
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">23</div>
+            <div className="text-2xl font-bold">{metrics.total_logs ?? "-"}</div>
             <p className="text-xs text-muted-foreground">This month</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Resolution</CardTitle>
+            <CardTitle className="text-sm font-medium">Manifest Left</CardTitle>
             <Clock className="h-4 w-4 text-status-pending" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8</div>
-            <p className="text-xs text-muted-foreground">Awaiting action</p>
+            <div className="text-2xl font-bold">{metrics.pending_logs ?? "-"}</div>
+            <p className="text-xs text-muted-foreground">Status: Manifest Left</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Resolved Cases</CardTitle>
+            <CardTitle className="text-sm font-medium">Shipped</CardTitle>
             <Package className="h-4 w-4 text-status-completed" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">15</div>
-            <p className="text-xs text-muted-foreground">Successfully handled</p>
+            <div className="text-2xl font-bold">{metrics.completed_logs ?? "-"}</div>
+            <p className="text-xs text-muted-foreground">Status: Shipped</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Quantity Left</CardTitle>
             <TrendingDown className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₹2.1L</div>
-            <p className="text-xs text-muted-foreground">Items value affected</p>
+            <div className="text-2xl font-bold">{metrics.total_quantity_left ?? "-"}</div>
+            <p className="text-xs text-muted-foreground">Items not shipped</p>
           </CardContent>
         </Card>
       </div>
@@ -299,7 +306,7 @@ export default function LeftGoodsLog() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredLeftGoods.map((item) => (
+              {paginatedLeftGoods.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell className="font-medium">{item.id}</TableCell>
                   <TableCell>{item.customer}</TableCell>
@@ -318,7 +325,14 @@ export default function LeftGoodsLog() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            // Find the full log object from logs (not filteredLeftGoods)
+                            const fullLog = logs.find(l => l.name === item.id);
+                            setSelectedLog(fullLog);
+                            setIsDetailsDialogOpen(true);
+                          }}
+                        >
                           <Eye className="h-4 w-4 mr-2" />
                           View Details
                         </DropdownMenuItem>
@@ -341,8 +355,77 @@ export default function LeftGoodsLog() {
               ))}
             </TableBody>
           </Table>
+          {/* Pagination Controls */}
+          <div className="flex justify-end mt-4 space-x-2 items-center">
+            <Button
+              variant="outline"
+              disabled={page === 1}
+              onClick={() => setPage(page - 1)}
+            >
+              Previous
+            </Button>
+            <span className="px-3 py-2">Page {page} of {totalPages}</span>
+            <Button
+              variant="outline"
+              disabled={page === totalPages || paginatedLeftGoods.length < PAGE_SIZE}
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+            </Button>
+          </div>
         </CardContent>
       </Card>
+      {/* Details Dialog */}
+      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Left Goods Log Details</DialogTitle>
+            <DialogDescription>All details for this log entry</DialogDescription>
+          </DialogHeader>
+          {selectedLog && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div><b>Log ID:</b> {selectedLog.name}</div>
+                <div><b>Customer:</b> {selectedLog.customer}</div>
+                <div><b>Goods Receipt:</b> {selectedLog.goods_receipt}</div>
+                <div><b>Shipment Manifest:</b> {selectedLog.shipment_manifest}</div>
+                <div><b>Reference Manifest:</b> {selectedLog.reference_shipment_manifest}</div>
+                <div><b>Log Date:</b> {selectedLog.log_date}</div>
+                <div><b>Destination:</b> {selectedLog.destination}</div>
+                <div><b>Status:</b> {selectedLog.status}</div>
+                <div className="col-span-2"><b>Remarks:</b> {selectedLog.remarks || '-'}</div>
+              </div>
+              <div>
+                <b>Left Goods Details:</b>
+                <Table className="mt-2">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Item Name</TableHead>
+                      <TableHead>Qty Submitted</TableHead>
+                      <TableHead>Qty Shipped</TableHead>
+                      <TableHead>Qty Left</TableHead>
+                      <TableHead>UOM</TableHead>
+                      <TableHead>Remarks</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(selectedLog.left_goods_details || []).map((d: any, i: number) => (
+                      <TableRow key={i}>
+                        <TableCell>{d.item_name}</TableCell>
+                        <TableCell>{d.quantity_submitted}</TableCell>
+                        <TableCell>{d.quantity_shipped}</TableCell>
+                        <TableCell>{d.quantity_left}</TableCell>
+                        <TableCell>{d.uom}</TableCell>
+                        <TableCell>{d.remarks}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

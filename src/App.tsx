@@ -13,6 +13,9 @@ import DeliveryNote from "./pages/DeliveryNote";
 import Customers from "./pages/Customers";
 import Items from "./pages/Items";
 import NotFound from "./pages/NotFound";
+import Auth from "./pages/Auth";
+import AuthCallback from "./pages/AuthCallback";
+import RequireAuth from "./components/RequireAuth";
 
 const queryClient = new QueryClient();
 
@@ -23,14 +26,18 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="goods-receipt" element={<GoodsReceipt />} />
-            <Route path="shipment-manifest" element={<div className="p-8">Shipment Manifest - Coming Soon</div>} />
-            <Route path="vehicle-log" element={<div className="p-8">Vehicle Log - Coming Soon</div>} />
-            <Route path="left-goods-log" element={<div className="p-8">Left Goods Log - Coming Soon</div>} />
-            <Route path="delivery-note" element={<div className="p-8">Delivery Note - Coming Soon</div>} />
-            <Route path="customers" element={<div className="p-8">Customers - Coming Soon</div>} />
+            <Route index element={<RequireAuth><Dashboard /></RequireAuth>} />
+            <Route path="dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+            <Route path="goods-receipt" element={<RequireAuth><GoodsReceipt /></RequireAuth>} />
+            <Route path="shipment-manifest" element={<RequireAuth><ShipmentManifest /></RequireAuth>} />
+            <Route path="vehicle-log" element={<RequireAuth><VehicleLog /></RequireAuth>} />
+            <Route path="left-goods-log" element={<RequireAuth><LeftGoodsLog /></RequireAuth>} />
+            <Route path="delivery-note" element={<RequireAuth><DeliveryNote /></RequireAuth>} />
+            <Route path="customers" element={<RequireAuth><Customers /></RequireAuth>} />
+            <Route path="items" element={<RequireAuth><Items /></RequireAuth>} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

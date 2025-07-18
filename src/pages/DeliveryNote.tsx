@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,48 +46,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const mockDeliveryNotes = [
-  {
-    id: "DN-2024-001",
-    goodsReceiptId: "GR-2024-001",
-    customer: "Acme Corporation",
-    deliveredTo: "Mr. Rajesh Gupta",
-    deliveryAddress: "Plot 45, Sector 12, Mumbai, Maharashtra - 400001",
-    deliveredDate: "2024-01-17",
-    deliveredBy: "Rahul Kumar",
-    status: "delivered",
-    totalAmount: "₹45,000",
-    invoiceGenerated: true,
-    paymentStatus: "pending"
-  },
-  {
-    id: "DN-2024-002", 
-    goodsReceiptId: "GR-2024-002",
-    customer: "Tech Solutions Ltd",
-    deliveredTo: "Ms. Priya Sharma",
-    deliveryAddress: "Building B-12, IT Park, Delhi, NCR - 110001",
-    deliveredDate: "2024-01-16",
-    deliveredBy: "Suresh Patel",
-    status: "delivered",
-    totalAmount: "₹32,500",
-    invoiceGenerated: true,
-    paymentStatus: "paid"
-  },
-  {
-    id: "DN-2024-003",
-    goodsReceiptId: "GR-2024-003",
-    customer: "Global Traders",
-    deliveredTo: "Mr. Amit Patel",
-    deliveryAddress: "Shop 25, Commercial Complex, Bangalore, Karnataka - 560001",
-    deliveredDate: null,
-    deliveredBy: "Amit Sharma",
-    status: "in-transit",
-    totalAmount: "₹67,800",
-    invoiceGenerated: false,
-    paymentStatus: "not-applicable"
-  }
-];
+import { fetchDeliveryNotes } from "@/api/frappe";
 
 const getStatusBadge = (status: string) => {
   switch (status) {
@@ -119,15 +78,55 @@ const getPaymentStatusBadge = (status: string) => {
   }
 };
 
+function formatTZS(amount: number | undefined) {
+  if (typeof amount !== "number") return "-";
+  return amount.toLocaleString("en-TZ", { style: "currency", currency: "TZS", maximumFractionDigits: 0 });
+}
+
+const PAGE_SIZE = 20;
+
 export default function DeliveryNote() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [notes, setNotes] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState<any>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  // Add state for details dialog
+  const [selectedNote, setSelectedNote] = useState<any | null>(null);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
-  const filteredNotes = mockDeliveryNotes.filter(note =>
-    note.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    note.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    note.deliveredTo.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await fetchDeliveryNotes(searchTerm);
+        setNotes(result.data);
+        setMetrics(result.metrics || {});
+      } catch (err: any) {
+        setError(err.message || "Error fetching delivery notes");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [searchTerm]);
+
+  const filteredNotes = notes.map(note => ({
+    id: note.name,
+    customer: note.customer_name || note.customer,
+    deliveredTo: note.customer_name || "-",
+    deliveredDate: note.posting_date,
+    totalAmount: note.grand_total,
+    status: note.status,
+    paymentStatus: note.per_billed >= 100 ? "paid" : (note.per_billed > 0 ? "pending" : "not-applicable"),
+    invoiceGenerated: note.per_billed > 0
+  }));
+
+  const totalPages = Math.max(1, Math.ceil(filteredNotes.length / PAGE_SIZE));
+  const paginatedNotes = filteredNotes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -227,7 +226,7 @@ export default function DeliveryNote() {
             <Receipt className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">234</div>
+            <div className="text-2xl font-bold">{metrics.total_delivery_notes ?? "-"}</div>
             <p className="text-xs text-muted-foreground">This month</p>
           </CardContent>
         </Card>
@@ -237,7 +236,7 @@ export default function DeliveryNote() {
             <FileText className="h-4 w-4 text-status-pending" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
+            <div className="text-2xl font-bold">{metrics.pending_deliveries ?? "-"}</div>
             <p className="text-xs text-muted-foreground">In transit</p>
           </CardContent>
         </Card>
@@ -247,8 +246,8 @@ export default function DeliveryNote() {
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">198</div>
-            <p className="text-xs text-muted-foreground">84% conversion</p>
+            <div className="text-2xl font-bold">{metrics.invoices_generated ?? "-"}</div>
+            <p className="text-xs text-muted-foreground">{metrics.total_delivery_notes ? Math.round((metrics.invoices_generated / metrics.total_delivery_notes) * 100) : 0}% conversion</p>
           </CardContent>
         </Card>
         <Card>
@@ -257,7 +256,7 @@ export default function DeliveryNote() {
             <CheckCircle className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₹12.4L</div>
+            <div className="text-2xl font-bold">{formatTZS(metrics.total_revenue)}</div>
             <p className="text-xs text-muted-foreground">This month</p>
           </CardContent>
         </Card>
@@ -301,7 +300,7 @@ export default function DeliveryNote() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredNotes.map((note) => (
+              {paginatedNotes.map((note) => (
                 <TableRow key={note.id}>
                   <TableCell className="font-medium">{note.id}</TableCell>
                   <TableCell>{note.customer}</TableCell>
@@ -326,7 +325,14 @@ export default function DeliveryNote() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            // Find the full note object
+                            const fullNote = notes.find(n => n.name === note.id) || {};
+                            setSelectedNote(fullNote);
+                            setIsDetailsDialogOpen(true);
+                          }}
+                        >
                           <Eye className="h-4 w-4 mr-2" />
                           View Details
                         </DropdownMenuItem>
@@ -349,8 +355,80 @@ export default function DeliveryNote() {
               ))}
             </TableBody>
           </Table>
+          {/* Pagination Controls */}
+          <div className="flex justify-end mt-4 space-x-2 items-center">
+            <Button
+              variant="outline"
+              disabled={page === 1}
+              onClick={() => setPage(page - 1)}
+            >
+              Previous
+            </Button>
+            <span className="px-3 py-2">Page {page} of {totalPages}</span>
+            <Button
+              variant="outline"
+              disabled={page === totalPages || paginatedNotes.length < PAGE_SIZE}
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+            </Button>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Details Dialog */}
+      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Delivery Note Details</DialogTitle>
+            <DialogDescription>All details for this delivery note</DialogDescription>
+          </DialogHeader>
+          {selectedNote && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div><b>Note ID:</b> {selectedNote.name}</div>
+                <div><b>Customer:</b> {selectedNote.customer_name || selectedNote.customer}</div>
+                <div><b>Delivered To:</b> {selectedNote.customer_name || '-'}</div>
+                <div><b>Delivery Date:</b> {selectedNote.posting_date || '-'}</div>
+                <div><b>Amount:</b> {formatTZS(selectedNote.grand_total)}</div>
+                <div><b>Status:</b> {selectedNote.status}</div>
+                <div><b>Payment Status:</b> {selectedNote.per_billed >= 100 ? 'Paid' : (selectedNote.per_billed > 0 ? 'Pending' : 'Not Applicable')}</div>
+                <div><b>Invoice Generated:</b> {selectedNote.per_billed > 0 ? 'Yes' : 'No'}</div>
+              </div>
+              {/* If there are child tables, render them here. Example: delivery_note_items */}
+              {selectedNote.items && Array.isArray(selectedNote.items) && (
+                <div>
+                  <b>Items:</b>
+                  <Table className="mt-2">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Item Code</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Qty</TableHead>
+                        <TableHead>UOM</TableHead>
+                        <TableHead>Rate</TableHead>
+                        <TableHead>Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedNote.items.map((item: any, i: number) => (
+                        <TableRow key={i}>
+                          <TableCell>{item.item_code}</TableCell>
+                          <TableCell>{item.description}</TableCell>
+                          <TableCell>{item.qty}</TableCell>
+                          <TableCell>{item.uom}</TableCell>
+                          <TableCell>{formatTZS(item.rate)}</TableCell>
+                          <TableCell>{formatTZS(item.amount)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

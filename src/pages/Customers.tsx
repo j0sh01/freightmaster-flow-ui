@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,61 +41,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const mockCustomers = [
-  {
-    id: "CUST-001",
-    name: "Acme Corporation",
-    contactPerson: "Mr. Rajesh Gupta",
-    email: "rajesh@acmecorp.com",
-    phone: "+91 98765 43210",
-    address: "Plot 45, Sector 12, Mumbai, Maharashtra - 400001",
-    totalShipments: 45,
-    totalRevenue: "₹4,25,000",
-    status: "active",
-    lastOrderDate: "2024-01-15",
-    paymentStatus: "good"
-  },
-  {
-    id: "CUST-002", 
-    name: "Tech Solutions Ltd",
-    contactPerson: "Ms. Priya Sharma",
-    email: "priya@techsolutions.com",
-    phone: "+91 87654 32109",
-    address: "Building B-12, IT Park, Delhi, NCR - 110001",
-    totalShipments: 32,
-    totalRevenue: "₹2,85,000",
-    status: "active",
-    lastOrderDate: "2024-01-14",
-    paymentStatus: "good"
-  },
-  {
-    id: "CUST-003",
-    name: "Global Traders",
-    contactPerson: "Mr. Amit Patel",
-    email: "amit@globaltraders.com",
-    phone: "+91 76543 21098",
-    address: "Shop 25, Commercial Complex, Bangalore, Karnataka - 560001",
-    totalShipments: 67,
-    totalRevenue: "₹6,78,000",
-    status: "active",
-    lastOrderDate: "2024-01-13",
-    paymentStatus: "delayed"
-  },
-  {
-    id: "CUST-004",
-    name: "Metro Distributors",
-    contactPerson: "Ms. Sneha Reddy",
-    email: "sneha@metrodist.com",
-    phone: "+91 65432 10987",
-    address: "Unit 8, Industrial Area, Hyderabad, Telangana - 500001",
-    totalShipments: 23,
-    totalRevenue: "₹1,89,000",
-    status: "inactive",
-    lastOrderDate: "2024-01-05",
-    paymentStatus: "overdue"
-  }
-];
+import { fetchCustomers } from "@/api/frappe";
 
 const getStatusBadge = (status: string) => {
   switch (status) {
@@ -125,13 +71,50 @@ const getPaymentStatusBadge = (status: string) => {
 
 export default function Customers() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState<any>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  // Add state for details dialog
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
-  const filteredCustomers = mockCustomers.filter(customer =>
-    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await fetchCustomers(searchTerm);
+        setCustomers(result.data);
+        setMetrics(result.metrics || {});
+      } catch (err: any) {
+        setError(err.message || "Error fetching customers");
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [searchTerm]);
+
+  const formatTZS = (amount: number) => {
+    if (typeof amount !== "number" || isNaN(amount)) return "-";
+    return amount.toLocaleString("en-US", { style: "currency", currency: "TZS", maximumFractionDigits: 0 });
+  };
+
+  const filteredCustomers = customers.map(customer => ({
+    id: customer.name,
+    name: customer.customer_name,
+    contactPerson: customer.customer_name, // No separate contact person in base Customer
+    email: customer.email_id,
+    phone: customer.mobile_no,
+    address: customer.primary_address || "-",
+    totalShipments: "-", // Placeholder, not available in base Customer
+    totalRevenue: "-", // Placeholder, not available in base Customer
+    status: customer.disabled ? "inactive" : "active",
+    lastOrderDate: customer.modified,
+    paymentStatus: "good" // Placeholder, not available in base Customer
+  }));
 
   return (
     <div className="space-y-6">
@@ -225,8 +208,8 @@ export default function Customers() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">156</div>
-            <p className="text-xs text-muted-foreground">+12 this month</p>
+            <div className="text-2xl font-bold">{metrics.total_customers ?? "-"}</div>
+            <p className="text-xs text-muted-foreground">&nbsp;</p>
           </CardContent>
         </Card>
         <Card>
@@ -235,8 +218,8 @@ export default function Customers() {
             <Package className="h-4 w-4 text-status-completed" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">134</div>
-            <p className="text-xs text-muted-foreground">86% active rate</p>
+            <div className="text-2xl font-bold">{metrics.active_customers ?? "-"}</div>
+            <p className="text-xs text-muted-foreground">&nbsp;</p>
           </CardContent>
         </Card>
         <Card>
@@ -245,7 +228,7 @@ export default function Customers() {
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₹45.6L</div>
+            <div className="text-2xl font-bold">{formatTZS(metrics.total_revenue)}</div>
             <p className="text-xs text-muted-foreground">This fiscal year</p>
           </CardContent>
         </Card>
@@ -255,7 +238,7 @@ export default function Customers() {
             <CreditCard className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₹2.3L</div>
+            <div className="text-2xl font-bold">{formatTZS(metrics.overdue_payments)}</div>
             <p className="text-xs text-muted-foreground">Requires attention</p>
           </CardContent>
         </Card>
@@ -288,7 +271,6 @@ export default function Customers() {
             <TableHeader>
               <TableRow>
                 <TableHead>Customer ID</TableHead>
-                <TableHead>Company Name</TableHead>
                 <TableHead>Contact Person</TableHead>
                 <TableHead>Contact Details</TableHead>
                 <TableHead>Shipments</TableHead>
@@ -302,15 +284,6 @@ export default function Customers() {
               {filteredCustomers.map((customer) => (
                 <TableRow key={customer.id}>
                   <TableCell className="font-medium">{customer.id}</TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{customer.name}</div>
-                      <div className="text-sm text-muted-foreground flex items-center">
-                        <MapPin className="h-3 w-3 mr-1" />
-                        {customer.address.split(',')[1]?.trim()}
-                      </div>
-                    </div>
-                  </TableCell>
                   <TableCell>{customer.contactPerson}</TableCell>
                   <TableCell>
                     <div className="space-y-1">
@@ -337,7 +310,14 @@ export default function Customers() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            // Find the full customer object
+                            const fullCustomer = customers.find(c => c.name === customer.id) || {};
+                            setSelectedCustomer(fullCustomer);
+                            setIsDetailsDialogOpen(true);
+                          }}
+                        >
                           <Eye className="h-4 w-4 mr-2" />
                           View Profile
                         </DropdownMenuItem>
@@ -365,6 +345,30 @@ export default function Customers() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Details Dialog */}
+      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Customer Profile</DialogTitle>
+            <DialogDescription>All details for this customer</DialogDescription>
+          </DialogHeader>
+          {selectedCustomer && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div><b>Customer ID:</b> {selectedCustomer.name}</div>
+                <div><b>Email:</b> {selectedCustomer.email_id || '-'}</div>
+                <div><b>Phone:</b> {selectedCustomer.mobile_no || '-'}</div>
+                <div><b>Address:</b> {selectedCustomer.primary_address || '-'}</div>
+                <div><b>Status:</b> {selectedCustomer.disabled ? 'Inactive' : 'Active'}</div>
+                <div><b>Last Order Date:</b> {selectedCustomer.modified || '-'}</div>
+                {/* Add more fields as needed */}
+              </div>
+              {/* If there are child tables or related info, render them here */}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
