@@ -349,13 +349,13 @@ export default function VehicleLog() {
                 const fullLog = logs.find(l => l.name === log.id) || {};
                 const manifests = (fullLog.vehicle_log_details || []).map((d: any) => d.reference_shipment_manifest).filter(Boolean);
                 return (
-                  <TableRow key={log.id}>
-                    <TableCell className="font-medium">{log.id}</TableCell>
-                    <TableCell>{log.vehicleNumber}</TableCell>
-                    <TableCell>{log.driver}</TableCell>
-                    <TableCell>{log.route}</TableCell>
+                <TableRow key={log.id}>
+                  <TableCell className="font-medium">{log.id}</TableCell>
+                  <TableCell>{log.vehicleNumber}</TableCell>
+                  <TableCell>{log.driver}</TableCell>
+                  <TableCell>{log.route}</TableCell>
                     <TableCell>{log.logDate}</TableCell>
-                    <TableCell>{getStatusBadge(log.status)}</TableCell>
+                  <TableCell>{getStatusBadge(log.status)}</TableCell>
                     <TableCell>
                       {/* Chunk manifests into groups of 3 for row wrapping */}
                       {(() => {
@@ -379,24 +379,24 @@ export default function VehicleLog() {
                         );
                       })()}
                     </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuItem
                             onClick={() => {
                               setSelectedLog(fullLog);
                               setIsDetailsDialogOpen(true);
                             }}
                           >
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Details
-                          </DropdownMenuItem>
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Details
+                        </DropdownMenuItem>
                           <DropdownMenuItem
                             disabled={printingId === log.id}
                             onClick={async () => {
@@ -428,19 +428,19 @@ export default function VehicleLog() {
                             ) : (
                               <span>Print</span>
                             )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Truck className="h-4 w-4 mr-2" />
-                            Update Status
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive">
-                            Cancel Trip
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <Truck className="h-4 w-4 mr-2" />
+                          Update Status
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive">
+                          Cancel Trip
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
                 );
               })}
             </TableBody>

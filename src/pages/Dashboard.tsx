@@ -42,40 +42,40 @@ export default function Dashboard() {
   }, []);
 
   // Stats cards config
-  const statsData = [
-    {
-      title: "Goods Received",
+const statsData = [
+  {
+    title: "Goods Received",
       value: loading ? "-" : metrics.goods_received ?? "-",
       change: "+12%", // Placeholder, can be dynamic if backend provides
-      changeType: "increase",
-      icon: Package,
-      color: "status-pending"
-    },
-    {
-      title: "Shipments in Transit",
+    changeType: "increase",
+    icon: Package,
+    color: "status-pending"
+  },
+  {
+    title: "Shipments in Transit",
       value: loading ? "-" : metrics.shipments_in_transit ?? "-",
-      change: "+5%",
-      changeType: "increase",
-      icon: Truck,
-      color: "status-in-transit"
-    },
-    {
-      title: "Left Goods",
+    change: "+5%",
+    changeType: "increase",
+    icon: Truck,
+    color: "status-in-transit"
+  },
+  {
+    title: "Left Goods",
       value: loading ? "-" : metrics.left_goods ?? "-",
-      change: "-8%",
-      changeType: "decrease",
-      icon: AlertTriangle,
-      color: "status-delayed"
-    },
-    {
-      title: "Completed Deliveries",
+    change: "-8%",
+    changeType: "decrease",
+    icon: AlertTriangle,
+    color: "status-delayed"
+  },
+  {
+    title: "Completed Deliveries",
       value: loading ? "-" : metrics.completed_deliveries ?? "-",
-      change: "+18%",
-      changeType: "increase",
-      icon: CheckCircle,
-      color: "status-completed"
-    }
-  ];
+    change: "+18%",
+    changeType: "increase",
+    icon: CheckCircle,
+    color: "status-completed"
+  }
+];
 
   return (
     <div className="space-y-6">

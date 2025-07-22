@@ -110,4 +110,100 @@ export async function printVehicleLog(name: string) {
   if (!res.ok) throw new Error("Failed to fetch Vehicle Log PDF");
   const blob = await res.blob();
   return blob;
+}
+
+export async function createGoodsReceipt(payload: any) {
+  const base = BASE_URL + "/api/method/tenaciousfreightmaster.tenacious_freightmaster.api.create_goods_receipt";
+  const res = await fetchWithAuth(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Failed to create goods receipt");
+  return data.message;
+}
+
+export async function createShipmentManifestFromGoodsReceipt(docName: string) {
+  const base = BASE_URL + "/api/method/tenaciousfreightmaster.tenacious_freightmaster.doctype.goods_receipt.goods_receipt.create_shipment_manifest";
+  const res = await fetchWithAuth(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_name: docName })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Failed to create shipment manifest");
+  return data.message;
+}
+
+export async function createDeliveryNoteFromGoodsReceipt(docName: string) {
+  const base = BASE_URL + "/api/method/tenaciousfreightmaster.tenacious_freightmaster.doctype.goods_receipt.goods_receipt.create_delivery_note";
+  const res = await fetchWithAuth(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_name: docName })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Failed to create delivery note");
+  return data.message;
+}
+
+export async function fetchEmployees() {
+  const base = BASE_URL + "/api/method/tenaciousfreightmaster.tenacious_freightmaster.api.get_employees";
+  const res = await fetchWithAuth(base);
+  if (!res.ok) throw new Error("Failed to fetch employees");
+  const data = await res.json();
+  return data.message?.data || [];
+}
+
+export async function fetchDeliveryPersons() {
+  const base = BASE_URL + "/api/method/tenaciousfreightmaster.tenacious_freightmaster.api.get_delivery_persons";
+  const res = await fetchWithAuth(base);
+  if (!res.ok) throw new Error("Failed to fetch delivery persons");
+  const data = await res.json();
+  return data.message?.data || [];
+}
+
+export async function fetchDestinations() {
+  const base = BASE_URL + "/api/method/tenaciousfreightmaster.tenacious_freightmaster.api.get_destinations";
+  const res = await fetchWithAuth(base);
+  if (!res.ok) throw new Error("Failed to fetch destinations");
+  const data = await res.json();
+  return data.message?.data || [];
+}
+
+export async function fetchUOMs() {
+  const base = BASE_URL + "/api/method/tenaciousfreightmaster.tenacious_freightmaster.api.get_uoms";
+  const res = await fetchWithAuth(base);
+  if (!res.ok) throw new Error("Failed to fetch UOMs");
+  const data = await res.json();
+  return data.message?.data || [];
+}
+
+export async function fetchItems() {
+  const base = BASE_URL + "/api/method/tenaciousfreightmaster.tenacious_freightmaster.api.get_items";
+  const res = await fetchWithAuth(base);
+  if (!res.ok) throw new Error("Failed to fetch items");
+  const data = await res.json();
+  return data.message?.data || [];
+}
+
+export async function fetchVehicles() {
+  const base = BASE_URL + "/api/method/tenaciousfreightmaster.tenacious_freightmaster.api.get_vehicles";
+  const res = await fetchWithAuth(base);
+  if (!res.ok) throw new Error("Failed to fetch vehicles");
+  const data = await res.json();
+  return data.message?.data || [];
+}
+
+export async function assignVehicleToManifest(manifestName: string, vehicleId: string) {
+  const base = BASE_URL + "/api/method/tenaciousfreightmaster.tenacious_freightmaster.doctype.shipment_manifest.shipment_manifest.assign_vehicle_to_manifest";
+  const res = await fetchWithAuth(base, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ manifest_name: manifestName, vehicle_id: vehicleId })
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || data.message || "Failed to assign vehicle");
+  return data.message;
 } 

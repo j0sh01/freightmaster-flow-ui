@@ -46,13 +46,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { fetchShipmentManifests } from "@/api/frappe";
-
-const mockVehicles = [
-  { number: "TN-45-AB-1234", driver: "Rajesh Kumar", type: "Truck", capacity: "5 Ton" },
-  { number: "KA-12-CD-5678", driver: "Suresh Patel", type: "Van", capacity: "2 Ton" },
-  { number: "MH-02-EF-9012", driver: "Amit Sharma", type: "Truck", capacity: "10 Ton" },
-];
+import { fetchShipmentManifests, assignVehicleToManifest, fetchVehicles } from "@/api/frappe";
 
 const mockGoodsReceipts = [
   { id: "GR-2024-001", customer: "Acme Corp", weight: "145 kg", packages: 7 },
@@ -88,15 +82,25 @@ export default function ShipmentManifest() {
   const [filters, setFilters] = useState({ agent: "", vehicle: "", destination: "" });
   const [selectedManifest, setSelectedManifest] = useState<any | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  // Add state for assign vehicle dialog
+  const [assignVehicleDialogOpen, setAssignVehicleDialogOpen] = useState(false);
+  const [assigningManifestId, setAssigningManifestId] = useState<string | null>(null);
+  const [selectedVehicle, setSelectedVehicle] = useState<string>("");
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [vehicles, setVehicles] = useState<any[]>([]);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        const result = await fetchShipmentManifests(searchTerm, filters);
-        setManifests(result.data);
-        setTotal(result.total);
+        const [manifestResult, vehicleResult] = await Promise.all([
+          fetchShipmentManifests(searchTerm, filters),
+          fetchVehicles()
+        ]);
+        setManifests(manifestResult.data);
+        setTotal(manifestResult.total);
+        setVehicles(vehicleResult);
       } catch (err: any) {
         setError(err.message || "Error fetching shipment manifests");
       } finally {
@@ -117,6 +121,7 @@ export default function ShipmentManifest() {
     status: doc.status || "submitted",
     shipmentDate: doc.shipment_date,
     totalShippingCharges: doc.total_shipping_charges,
+    docstatus: doc.docstatus, // <-- add this
   }));
 
   const filteredManifests = mappedManifests.filter(manifest =>
@@ -162,9 +167,9 @@ export default function ShipmentManifest() {
                       <SelectValue placeholder="Choose vehicle" />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockVehicles.map((vehicle) => (
-                        <SelectItem key={vehicle.number} value={vehicle.number}>
-                          {vehicle.number} - {vehicle.driver} ({vehicle.type})
+                      {vehicles.map((vehicle) => (
+                        <SelectItem key={vehicle.name} value={vehicle.vehicle_id}>
+                          {vehicle.vehicle_id} - {vehicle.driver || "No driver"} ({vehicle.vehicle_type || "Type"}, {vehicle.capacity || "?"})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -290,10 +295,10 @@ export default function ShipmentManifest() {
             </div>
             <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filter
-                </Button>
+            <Button variant="outline">
+              <Filter className="h-4 w-4 mr-2" />
+              Filter
+            </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
@@ -338,48 +343,48 @@ export default function ShipmentManifest() {
             <div>Loading...</div>
           ) : (
             <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Manifest ID</TableHead>
-                    <TableHead>Vehicle</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Manifest ID</TableHead>
+                <TableHead>Vehicle</TableHead>
                     <TableHead>Agent</TableHead>
-                    <TableHead>Destination</TableHead>
-                    <TableHead>Goods Receipts</TableHead>
+                <TableHead>Destination</TableHead>
+                <TableHead>Goods Receipts</TableHead>
                     <TableHead>Items</TableHead>
-                    <TableHead>Status</TableHead>
+                <TableHead>Status</TableHead>
                     <TableHead>Shipment Date</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
                   {paginatedManifests.map((manifest) => (
-                    <TableRow key={manifest.id}>
-                      <TableCell className="font-medium">{manifest.id}</TableCell>
+                <TableRow key={manifest.id}>
+                  <TableCell className="font-medium">{manifest.id}</TableCell>
                       <TableCell>{manifest.vehicle}</TableCell>
                       <TableCell>{manifest.agent}</TableCell>
-                      <TableCell>{manifest.destination}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
+                  <TableCell>{manifest.destination}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
                           {manifest.goodsReceipts.map((gr: string) => (
-                            <Badge key={gr} variant="secondary" className="text-xs">
-                              {gr}
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
+                        <Badge key={gr} variant="secondary" className="text-xs">
+                          {gr}
+                        </Badge>
+                      ))}
+                    </div>
+                  </TableCell>
                       <TableCell>{manifest.items}</TableCell>
-                      <TableCell>{getStatusBadge(manifest.status)}</TableCell>
+                  <TableCell>{getStatusBadge(manifest.status)}</TableCell>
                       <TableCell>{manifest.shipmentDate}</TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuItem
                               onClick={() => {
                                 // Find the full manifest object from manifests (not mappedManifests)
@@ -388,28 +393,38 @@ export default function ShipmentManifest() {
                                 setIsDetailsDialogOpen(true);
                               }}
                             >
-                              <Eye className="h-4 w-4 mr-2" />
-                              View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Truck className="h-4 w-4 mr-2" />
-                              View Vehicle Log
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <FileText className="h-4 w-4 mr-2" />
-                              Print Manifest
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive">
-                              Cancel Shipment
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <Truck className="h-4 w-4 mr-2" />
+                          View Vehicle Log
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <FileText className="h-4 w-4 mr-2" />
+                          Print Manifest
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setAssigningManifestId(manifest.id);
+                            setAssignVehicleDialogOpen(true);
+                          }}
+                          disabled={manifest.docstatus !== 0}
+                        >
+                          <Truck className="h-4 w-4 mr-2" />
+                          Assign Vehicle
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive">
+                          Cancel Shipment
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
               {/* Details Dialog */}
               <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
                 <DialogContent className="max-w-2xl">
@@ -480,6 +495,57 @@ export default function ShipmentManifest() {
           </div>
         </CardContent>
       </Card>
+      {/* Assign Vehicle Dialog */}
+      <Dialog open={assignVehicleDialogOpen} onOpenChange={setAssignVehicleDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Vehicle</DialogTitle>
+            <DialogDescription>Select a vehicle to assign to this manifest.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Select value={selectedVehicle} onValueChange={setSelectedVehicle}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose vehicle" />
+              </SelectTrigger>
+              <SelectContent>
+                {vehicles.map((vehicle) => (
+                  <SelectItem key={vehicle.name} value={vehicle.name}>
+                    {vehicle.name} - {vehicle.model || "No model"} ({vehicle.make || "No make"})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setAssignVehicleDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!assigningManifestId || !selectedVehicle) return;
+                setAssignLoading(true);
+                try {
+                  await assignVehicleToManifest(assigningManifestId, selectedVehicle);
+                  setAssignVehicleDialogOpen(false);
+                  setSelectedVehicle("");
+                  setAssigningManifestId(null);
+                  // Reload list
+                  const result = await fetchShipmentManifests(searchTerm, filters);
+                  setManifests(result.data);
+                  setTotal(result.total);
+                } catch (err: any) {
+                  alert(err.message);
+                } finally {
+                  setAssignLoading(false);
+                }
+              }}
+              disabled={!selectedVehicle || assignLoading}
+            >
+              {assignLoading ? "Assigning..." : "Assign Vehicle"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
