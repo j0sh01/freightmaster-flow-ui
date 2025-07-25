@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { createGoodsReceipt, fetchCustomers, fetchGoodsReceipts, fetchEmployees, fetchDeliveryPersons, fetchDestinations, fetchUOMs, fetchItems, createShipmentManifestFromGoodsReceipt, createDeliveryNoteFromGoodsReceipt } from "@/api/frappe";
+import { createGoodsReceipt, fetchCustomers, fetchGoodsReceipts, fetchEmployees, fetchDeliveryPersons, fetchDestinations, fetchUOMs, fetchItems, createShipmentManifestFromGoodsReceipt, createDeliveryNoteFromGoodsReceipt, getCurrentUser } from "@/api/frappe";
 
 const getStatusBadge = (status: string) => {
   switch (status) {
@@ -173,24 +173,44 @@ export default function GoodsReceipt() {
   // Submit handler
   const handleCreate = async () => {
     try {
-      // Fetch current session user
-      const userRes = await fetch('/api/method/frappe.auth.get_logged_user');
-      const userData = await userRes.json();
-      const main_agent = userData.message;
+      console.log("Starting goods receipt creation...");
+
+      // Fetch current session user using proper API
+      console.log("Fetching current user...");
+      const userData = await getCurrentUser();
+      console.log("Current user data:", userData);
+
+      const main_agent = userData.user;
       const payload = { ...form, main_agent };
+      console.log("Payload to send:", payload);
+
+      console.log("Calling createGoodsReceipt API...");
       const msg = await createGoodsReceipt(payload);
+      console.log("API response:", msg);
+
       let description = msg;
       if (typeof msg === 'object' && msg.message) {
         description = msg.message;
       }
+
       toast({ title: "Goods Receipt Created", description });
       setIsCreateDialogOpen(false);
+
       // Reload list after create
+      console.log("Reloading goods receipts list...");
       const result = await fetchGoodsReceipts();
       setGoodsReceipts(result.data);
       setTotal(result.total);
+      console.log("Goods receipt creation completed successfully");
+
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      console.error("Error creating goods receipt:", err);
+      console.error("Error stack:", err.stack);
+      toast({
+        title: "Error",
+        description: err.message || "An unexpected error occurred",
+        variant: "destructive"
+      });
     }
   };
 

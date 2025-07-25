@@ -119,9 +119,29 @@ export async function createGoodsReceipt(payload: any) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
+
+  // Check if response is JSON
+  const contentType = res.headers.get("content-type");
+  if (!contentType || !contentType.includes("application/json")) {
+    const text = await res.text();
+    console.error("Non-JSON response:", text);
+    throw new Error("Server returned non-JSON response. Please check your authentication.");
+  }
+
   const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Failed to create goods receipt");
-  return data.message;
+
+  // Handle API errors
+  if (!res.ok) {
+    const errorMessage = data.error || data.message || `HTTP ${res.status}: ${res.statusText}`;
+    throw new Error(errorMessage);
+  }
+
+  // Handle application errors
+  if (data.error) {
+    throw new Error(data.error);
+  }
+
+  return data.message || data;
 }
 
 export async function createShipmentManifestFromGoodsReceipt(docName: string) {
@@ -206,4 +226,12 @@ export async function assignVehicleToManifest(manifestName: string, vehicleId: s
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || data.message || "Failed to assign vehicle");
   return data.message;
-} 
+}
+
+export async function getCurrentUser() {
+  const base = BASE_URL + "/api/method/tenaciousfreightmaster.tenacious_freightmaster.api.get_current_user";
+  const res = await fetchWithAuth(base);
+  if (!res.ok) throw new Error("Failed to fetch current user");
+  const data = await res.json();
+  return data.message;
+}
